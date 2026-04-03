@@ -1,13 +1,2211 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
-  <head>
+<head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Vite + React + TS</title>
-  </head>
-  <body>
-    <div id="root"></div>
-    <script type="module" src="/src/main.tsx"></script>
-  </body>
+    <title>Room Tracker</title>
+
+    <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
+
+    <style>
+        :root {
+            --bg: #111;
+            --text: #ffffff;
+            --title: #eef3ff;
+            --muted: #b8c0d4;
+
+            --pill-bg: rgba(255, 255, 255, 0.06);
+            --pill-border: rgba(255, 255, 255, 0.1);
+            --pill-bg-hover: rgba(255, 255, 255, 0.1);
+
+            --card-bg1: rgba(42, 42, 48, 0.85);
+            --card-bg2: rgba(25, 25, 28, 0.9);
+            --card-border: rgba(255, 255, 255, 0.08);
+
+            --room-bg: #222;
+            --room-border: #444;
+            --cell-bg: #1b1b1b;
+
+        }
+
+        body[data-theme="light"] {
+            --bg: #f5f7ff;
+            --text: #0b1220;
+            --title: #0b1220;
+            --muted: #4b556b;
+
+            --pill-bg: rgba(2, 6, 23, 0.05);
+            --pill-border: rgba(2, 6, 23, 0.12);
+            --pill-bg-hover: rgba(2, 6, 23, 0.08);
+
+            --card-bg1: rgba(255, 255, 255, 0.85);
+            --card-bg2: rgba(235, 241, 255, 0.92);
+            --card-border: rgba(2, 6, 23, 0.08);
+
+            --room-bg: #e9efff;
+            --room-border: #cbd5e1;
+            --cell-bg: #f1f5ff;
+
+        }
+
+        body {
+            font-family: Arial, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            display: flex;
+            justify-content: center;
+            align-items: flex-start;
+            min-height: 100vh;
+            margin: 0;
+            padding: 28px 16px;
+            box-sizing: border-box;
+        }
+
+        .app {
+            width: min(920px, 100%);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 18px;
+        }
+
+        .title-row {
+            width: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 16px;
+            flex-wrap: wrap;
+        }
+
+        .title-block {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .page-title {
+            margin: 0;
+            font-size: 34px;
+            font-weight: 800;
+            letter-spacing: 0.03em;
+            color: var(--title);
+            text-shadow: 0 6px 24px rgba(90, 130, 255, 0.3);
+            cursor: pointer;
+        }
+
+        .page-title:hover {
+            opacity: 0.92;
+        }
+
+        .page-tagline {
+            margin: 0;
+            font-size: 13px;
+            font-weight: 600;
+            letter-spacing: 0.12em;
+            text-transform: uppercase;
+            color: var(--muted);
+        }
+
+        .client-id-dialog {
+            border: 1px solid var(--card-border);
+            border-radius: 16px;
+            padding: 0;
+            max-width: min(420px, 92vw);
+            background: linear-gradient(150deg, var(--card-bg1), var(--card-bg2));
+            color: var(--text);
+            box-shadow: 0 24px 48px rgba(0, 0, 0, 0.45);
+        }
+
+        .client-id-dialog::backdrop {
+            background: rgba(0, 0, 0, 0.55);
+        }
+
+        body[data-theme="light"] .client-id-dialog::backdrop {
+            background: rgba(15, 23, 42, 0.35);
+        }
+
+        .client-id-dialog__inner {
+            padding: 20px 22px;
+        }
+
+        .client-id-dialog__title {
+            margin: 0 0 14px;
+            font-size: 18px;
+            font-weight: 800;
+            color: var(--title);
+        }
+
+        .client-id-dialog__label {
+            display: block;
+            font-size: 12px;
+            letter-spacing: 0.06em;
+            text-transform: uppercase;
+            color: var(--muted);
+            margin-bottom: 8px;
+        }
+
+        .client-id-dialog__select {
+            width: 100%;
+            padding: 10px 12px;
+            border-radius: 10px;
+            border: 1px solid var(--pill-border);
+            background: var(--pill-bg);
+            color: var(--text);
+            font-size: 15px;
+            margin-bottom: 16px;
+            box-sizing: border-box;
+        }
+
+        .client-id-dialog__hint {
+            font-size: 12px;
+            color: var(--muted);
+            margin: -8px 0 16px;
+            line-height: 1.4;
+        }
+
+        .client-id-dialog__actions {
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+        }
+
+        .client-id-dialog__btn {
+            padding: 8px 14px;
+            border-radius: 10px;
+            border: 1px solid var(--pill-border);
+            background: var(--pill-bg);
+            color: var(--text);
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+        }
+
+        .client-id-dialog__btn:hover {
+            background: var(--pill-bg-hover);
+        }
+
+        .client-id-dialog__btn--primary {
+            border-color: rgba(91, 140, 255, 0.45);
+            background: rgba(91, 140, 255, 0.18);
+        }
+
+        .config-dialog__input {
+            width: 100%;
+            padding: 10px 12px;
+            border-radius: 10px;
+            border: 1px solid var(--pill-border);
+            background: var(--pill-bg);
+            color: var(--text);
+            font-size: 15px;
+            margin-bottom: 16px;
+            box-sizing: border-box;
+        }
+
+        .mqtt-status {
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            padding: 8px 14px;
+            border-radius: 999px;
+            font-size: 12px;
+            font-weight: 600;
+            letter-spacing: 0.06em;
+            text-transform: uppercase;
+            background: var(--pill-bg);
+            border: 1px solid var(--pill-border);
+            cursor: pointer;
+            user-select: none;
+        }
+
+        .mqtt-status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #6b7280;
+            box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.12);
+            flex-shrink: 0;
+        }
+
+        .mqtt-status.connecting .mqtt-status-dot {
+            background: #fbbf24;
+            animation: statusPulse 1.2s ease-in-out infinite;
+        }
+
+        .mqtt-status.connected .mqtt-status-dot {
+            background: #34d399;
+            box-shadow: 0 0 10px rgba(52, 211, 153, 0.55);
+        }
+
+        .mqtt-status.reconnecting .mqtt-status-dot {
+            background: #fbbf24;
+            animation: statusPulse 0.8s ease-in-out infinite;
+        }
+
+        .mqtt-status.disconnected .mqtt-status-dot,
+        .mqtt-status.offline .mqtt-status-dot,
+        .mqtt-status.error .mqtt-status-dot {
+            background: #f87171;
+        }
+
+        @keyframes statusPulse {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.55; transform: scale(0.92); }
+        }
+
+        .gauges {
+            width: 100%;
+            display: grid;
+            grid-template-columns: repeat(4, minmax(160px, 1fr));
+            gap: 12px;
+        }
+
+        .gauge-card {
+            background: linear-gradient(150deg, var(--card-bg1), var(--card-bg2));
+            border: 1px solid var(--card-border);
+            border-radius: 16px;
+            padding: 14px 16px;
+            box-shadow: 0 10px 24px rgba(0, 0, 0, 0.28);
+            backdrop-filter: blur(4px);
+        }
+
+        .gauge-head {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 12px;
+            letter-spacing: 0.05em;
+            color: var(--muted);
+            margin-bottom: 8px;
+            text-transform: uppercase;
+        }
+
+        .gauge-value {
+            font-size: 30px;
+            font-weight: 700;
+            line-height: 1;
+            margin-bottom: 10px;
+        }
+
+        .gauge-bar {
+            height: 8px;
+            border-radius: 999px;
+            background: rgba(255, 255, 255, 0.08);
+            overflow: hidden;
+        }
+
+        .gauge-fill {
+            height: 100%;
+            width: 0%;
+            border-radius: inherit;
+            transition: width 260ms ease;
+        }
+
+        .gauge-card[data-metric="temperature"] .gauge-fill {
+            background: linear-gradient(90deg, #15b1ff, #ff6a3d);
+        }
+
+        .gauge-card[data-metric="humidity"] .gauge-fill {
+            background: linear-gradient(90deg, #0ec7d6, #5c82ff);
+        }
+
+        .gauge-card[data-metric="Brightness1"] .gauge-fill {
+            background: linear-gradient(90deg, #ffc542, #ffe96b);
+        }
+
+        .presence-card {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            gap: 12px;
+        }
+
+        .presence-body {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .presence-icon {
+            width: 42px;
+            height: 42px;
+            border-radius: 50%;
+            display: grid;
+            place-items: center;
+            font-size: 22px;
+            background: rgba(255, 255, 255, 0.08);
+            border: 1px solid rgba(255, 255, 255, 0.18);
+            transition: transform 220ms ease, box-shadow 220ms ease, background 220ms ease;
+        }
+
+        .presence-status {
+            font-size: 20px;
+            font-weight: 700;
+            line-height: 1;
+        }
+
+        .presence-subtext {
+            font-size: 12px;
+            color: #9ba8c7;
+            margin-top: 4px;
+        }
+
+        .presence-card.present .presence-icon {
+            background: rgba(21, 196, 127, 0.2);
+            box-shadow: 0 0 0 6px rgba(21, 196, 127, 0.15);
+            transform: scale(1.04);
+        }
+
+        .presence-card.present .presence-status {
+            color: #7ff4bf;
+        }
+
+        .presence-card.absent .presence-icon {
+            background: rgba(255, 122, 122, 0.15);
+            box-shadow: 0 0 0 6px rgba(255, 122, 122, 0.12);
+        }
+
+        .presence-card.absent .presence-status {
+            color: #ffadad;
+        }
+
+        .count-card .presence-icon {
+            background: rgba(124, 156, 255, 0.2);
+            box-shadow: 0 0 0 6px rgba(124, 156, 255, 0.12);
+        }
+
+        .count-card.count-card--actionable {
+            cursor: pointer;
+            user-select: none;
+        }
+
+        .count-card.count-card--actionable:hover {
+            box-shadow: 0 14px 28px rgba(0, 0, 0, 0.34);
+        }
+
+        .gauge-card.gauge-card--actionable {
+            cursor: pointer;
+            user-select: none;
+        }
+
+        .gauge-card.gauge-card--actionable:hover {
+            box-shadow: 0 14px 28px rgba(0, 0, 0, 0.34);
+        }
+
+        .count-value {
+            font-size: 26px;
+            font-weight: 700;
+            line-height: 1;
+            color: #d7e2ff;
+        }
+
+        .zone-status-row {
+            width: 100%;
+            display: grid;
+            grid-template-columns: repeat(4, minmax(140px, 1fr));
+            gap: 12px;
+        }
+
+        .zone-pill {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+            padding: 10px 14px;
+            border-radius: 999px;
+            background: var(--pill-bg);
+            border: 1px solid var(--pill-border);
+            cursor: pointer;
+            user-select: none;
+        }
+
+        .zone-pill:hover {
+            background: var(--pill-bg-hover);
+        }
+
+        .zone-pill__name {
+            font-size: 13px;
+            font-weight: 700;
+            color: var(--text);
+        }
+
+        .zone-pill__state {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--muted);
+            white-space: nowrap;
+        }
+
+        .zone-pill__dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: #f87171;
+            box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.12);
+            flex-shrink: 0;
+        }
+
+        .zone-pill.occupied .zone-pill__dot {
+            background: #34d399;
+            box-shadow: 0 0 10px rgba(52, 211, 153, 0.45);
+        }
+
+        .zone-pill.occupied .zone-pill__state {
+            color: #7ff4bf;
+        }
+
+        .zone-pill.vacant .zone-pill__state {
+            color: #ffadad;
+        }
+
+        #room {
+            position: relative;
+            display: grid;
+            grid-template-columns: repeat(15, 30px);
+            grid-template-rows: repeat(28, 30px);
+            gap: 2px;
+            background: var(--room-bg);
+            padding: 5px;
+            border: 2px solid var(--room-border);
+        }
+
+        .cell {
+            width: 30px;
+            height: 30px;
+            background: var(--cell-bg);
+        }
+
+        .person {
+            position: absolute;
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            pointer-events: none;
+            opacity: 1;
+            z-index: 2;
+            transform: translate(0, 0);
+            transition: transform 280ms ease, opacity 500ms ease;
+        }
+
+        .person.fading {
+            opacity: 0;
+        }
+
+        .trail-dot {
+            position: absolute;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            pointer-events: none;
+            z-index: 1;
+            opacity: 0.8;
+            animation: trailFadeOut 1800ms ease-out forwards;
+        }
+
+        @keyframes trailFadeOut {
+            0% {
+                opacity: 0.8;
+                transform: scale(1);
+            }
+            100% {
+                opacity: 0;
+                transform: scale(0.45);
+            }
+        }
+
+        .title-actions {
+            display: inline-flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .theme-toggle {
+            padding: 8px 12px;
+            border-radius: 999px;
+            border: 1px solid var(--pill-border);
+            background: var(--pill-bg);
+            color: var(--text);
+            font-size: 12px;
+            font-weight: 700;
+            letter-spacing: 0.04em;
+            cursor: pointer;
+            user-select: none;
+        }
+
+        .theme-toggle:hover {
+            background: var(--pill-bg-hover);
+        }
+
+        .last-compliant-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 14px;
+            border-radius: 999px;
+            font-size: 12px;
+            font-weight: 600;
+            letter-spacing: 0.03em;
+            background: var(--pill-bg);
+            border: 1px solid var(--pill-border);
+            color: var(--muted);
+            white-space: nowrap;
+            max-width: 100%;
+            cursor: pointer;
+            user-select: none;
+        }
+
+        .last-compliant-pill:hover {
+            background: var(--pill-bg-hover);
+        }
+
+        .last-compliant-pill strong {
+            color: var(--text);
+            font-weight: 700;
+        }
+
+        @media (max-width: 900px) {
+            .gauges {
+                grid-template-columns: repeat(2, minmax(160px, 1fr));
+            }
+            .zone-status-row {
+                grid-template-columns: repeat(2, minmax(160px, 1fr));
+            }
+        }
+
+        @media (max-width: 600px) {
+            body {
+                padding: 20px 12px;
+            }
+            .gauges {
+                grid-template-columns: 1fr;
+            }
+            .gauge-value {
+                font-size: 28px;
+            }
+            .zone-status-row {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        @media (max-width: 520px) {
+            #room {
+                transform: scale(0.88);
+                transform-origin: top center;
+            }
+        }
+    </style>
+</head>
+<body>
+
+<div class="app">
+    <div class="title-row">
+        <div class="title-block">
+            <h1 class="page-title" id="page-title">Sales Office</h1>
+            <p class="page-tagline">Smart Space Sensor</p>
+        </div>
+        <div class="title-actions">
+            <div class="last-compliant-pill" id="last-compliant-pill" role="button" tabindex="0" title="Click to switch between clock time and time since last data">
+                <span id="last-compliant-label">Last data:</span>
+                <strong id="last-compliant-time">—</strong>
+            </div>
+            <div class="mqtt-status connected" id="mqtt-status" role="button" tabindex="0" title="Click to disconnect/connect">
+                <span class="mqtt-status-dot" aria-hidden="true"></span>
+                <span id="mqtt-status-text">Connected</span>
+            </div>
+            <button type="button" class="theme-toggle" id="theme-toggle" aria-label="Toggle dark/light theme">Light</button>
+        </div>
+    </div>
+    <div class="gauges">
+        <div class="gauge-card gauge-card--actionable" data-metric="temperature" id="temperature-card" role="button" tabindex="0" title="Click to calibrate temperature">
+            <div class="gauge-head">
+                <span>Temperature</span>
+                <span id="temperature-unit">C</span>
+            </div>
+            <div class="gauge-value" id="temperature-value">--</div>
+            <div class="gauge-bar"><div class="gauge-fill" id="temperature-fill"></div></div>
+        </div>
+
+        <div class="gauge-card" data-metric="humidity">
+            <div class="gauge-head">
+                <span>Humidity</span>
+                <span id="humidity-unit">%</span>
+            </div>
+            <div class="gauge-value" id="humidity-value">--</div>
+            <div class="gauge-bar"><div class="gauge-fill" id="humidity-fill"></div></div>
+        </div>
+
+        <div class="gauge-card" data-metric="Brightness1">
+            <div class="gauge-head">
+                <span>Brightness1</span>
+                <span id="Brightness1-unit">lux</span>
+            </div>
+            <div class="gauge-value" id="Brightness1-value">--</div>
+            <div class="gauge-bar"><div class="gauge-fill" id="Brightness1-fill"></div></div>
+        </div>
+
+        <div class="gauge-card presence-card absent" id="presence-card">
+            <div class="gauge-head">
+                <span>Presence</span>
+                <span>Office</span>
+            </div>
+            <div class="presence-body">
+                <div class="presence-icon" id="presence-icon">○</div>
+                <div>
+                    <div class="presence-status" id="presence-status">Not Detected</div>
+                    <div class="presence-subtext" id="presence-last-time">Last Presence: —</div>
+                    <!-- <div class="presence-subtext" id="presence-topic-subtext">Listening: Presence1</div> -->
+                </div>
+            </div>
+        </div>
+
+        <div class="gauge-card presence-card count-card" id="people-total-card">
+            <div class="gauge-head">
+                <span>Total People</span>
+                <span style="display:inline-flex;align-items:center;gap:8px;">
+                    <span class="mqtt-status-dot" aria-hidden="true" id="people-total-live-dot"></span>
+                    <span>Live</span>
+                </span>
+            </div>
+            <div class="presence-body">
+                <div class="presence-icon" id="people-total-icon">👥</div>
+                <div>
+                    <div class="count-value" id="people-total-value">0</div>
+                    <!-- <div class="presence-subtext" id="people-total-topic-subtext">Listening: NumberOfPeopleTotal</div> -->
+                </div>
+            </div>
+        </div>
+
+        <div class="gauge-card presence-card count-card count-card--actionable" id="door-entries-card" role="button" tabindex="0" title="Click to reset door counters">
+            <div class="gauge-head">
+                <span>Door Entries</span>
+                <span>Total</span>
+            </div>
+            <div class="presence-body">
+                <div class="presence-icon" id="door-entries-icon">↘</div>
+                <div>
+                    <div class="count-value" id="door-entries-value">0</div>
+                    <!-- <div class="presence-subtext" id="door-entries-topic-subtext">Listening: DoorEntries</div> -->
+                    <div class="presence-subtext" id="door-entries-last-time">Last Entry: —</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="gauge-card presence-card count-card count-card--actionable" id="door-exits-card" role="button" tabindex="0" title="Click to reset door counters">
+            <div class="gauge-head">
+                <span>Door Exits</span>
+                <span>Total</span>
+            </div>
+            <div class="presence-body">
+                <div class="presence-icon" id="door-exits-icon">↗</div>
+                <div>
+                    <div class="count-value" id="door-exits-value">0</div>
+                    <!--<div class="presence-subtext" id="door-exits-topic-subtext">Listening: DoorExits</div> -->
+                    <div class="presence-subtext" id="door-exits-last-time">Last Exit: —</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="zone-status-row">
+        <div class="zone-pill vacant" id="zone-0-pill" role="button" tabindex="0" title="Click to rename zone">
+            <span class="zone-pill__name" id="zone-0-name">Zone 1</span>
+            <span class="zone-pill__state">
+                <span class="zone-pill__dot" aria-hidden="true"></span>
+                <span id="zone-0-state">Vacant</span>
+            </span>
+        </div>
+        <div class="zone-pill vacant" id="zone-1-pill" role="button" tabindex="0" title="Click to rename zone">
+            <span class="zone-pill__name" id="zone-1-name">Zone 2</span>
+            <span class="zone-pill__state">
+                <span class="zone-pill__dot" aria-hidden="true"></span>
+                <span id="zone-1-state">Vacant</span>
+            </span>
+        </div>
+        <div class="zone-pill vacant" id="zone-2-pill" role="button" tabindex="0" title="Click to rename zone">
+            <span class="zone-pill__name" id="zone-2-name">Zone 3</span>
+            <span class="zone-pill__state">
+                <span class="zone-pill__dot" aria-hidden="true"></span>
+                <span id="zone-2-state">Vacant</span>
+            </span>
+        </div>
+        <div class="zone-pill vacant" id="zone-3-pill" role="button" tabindex="0" title="Click to rename zone">
+            <span class="zone-pill__name" id="zone-3-name">Zone 4</span>
+            <span class="zone-pill__state">
+                <span class="zone-pill__dot" aria-hidden="true"></span>
+                <span id="zone-3-state">Vacant</span>
+            </span>
+        </div>
+    </div>
+
+    <div id="room"></div>
+</div>
+
+<dialog id="client-id-dialog" class="client-id-dialog" aria-labelledby="client-id-dialog-title">
+    <div class="client-id-dialog__inner">
+        <h2 class="client-id-dialog__title" id="client-id-dialog-title">Client ID</h2>
+        <label class="client-id-dialog__label" for="client-id-select">Subscription message clientId</label>
+        <select id="client-id-select" class="client-id-dialog__select"></select>
+        <p class="client-id-dialog__hint" id="client-id-dialog-hint">Options appear as messages arrive. Only payloads with a matching clientId field are shown.</p>
+        <div class="client-id-dialog__actions">
+            <button type="button" class="client-id-dialog__btn" id="client-id-cancel">Cancel</button>
+            <button type="button" class="client-id-dialog__btn client-id-dialog__btn--primary" id="client-id-apply">Apply</button>
+        </div>
+    </div>
+</dialog>
+
+<dialog id="temperature-calibration-dialog" class="client-id-dialog" aria-labelledby="temperature-calibration-title">
+    <div class="client-id-dialog__inner">
+        <h2 class="client-id-dialog__title" id="temperature-calibration-title">Temperature Calibration</h2>
+        <label class="client-id-dialog__label" for="temperature-calibration-input">Correction value</label>
+        <input
+            id="temperature-calibration-input"
+            class="config-dialog__input"
+            type="number"
+            min="-12"
+            max="12"
+            step="0.01"
+            inputmode="decimal"
+            placeholder="e.g. -10.34"
+        />
+        <p class="client-id-dialog__hint">Enter a positive or negative decimal value between -12 and 12 to calibrate the temperature sensor.</p>
+        <div class="client-id-dialog__actions">
+            <button type="button" class="client-id-dialog__btn" id="temperature-calibration-cancel">Cancel</button>
+            <button type="button" class="client-id-dialog__btn client-id-dialog__btn--primary" id="temperature-calibration-apply">Apply</button>
+        </div>
+    </div>
+</dialog>
+
+<dialog id="zone-name-dialog" class="client-id-dialog" aria-labelledby="zone-name-dialog-title">
+    <div class="client-id-dialog__inner">
+        <h2 class="client-id-dialog__title" id="zone-name-dialog-title">Rename Zone</h2>
+        <label class="client-id-dialog__label" for="zone-name-input">Zone name</label>
+        <input
+            id="zone-name-input"
+            class="config-dialog__input"
+            type="text"
+            maxlength="48"
+            placeholder="Enter zone name"
+        />
+        <p class="client-id-dialog__hint">Leave blank to restore the default zone name.</p>
+        <div class="client-id-dialog__actions">
+            <button type="button" class="client-id-dialog__btn" id="zone-name-cancel">Cancel</button>
+            <button type="button" class="client-id-dialog__btn client-id-dialog__btn--primary" id="zone-name-apply">Apply</button>
+        </div>
+    </div>
+</dialog>
+
+<dialog id="door-reset-dialog" class="client-id-dialog" aria-labelledby="door-reset-dialog-title">
+    <div class="client-id-dialog__inner">
+        <h2 class="client-id-dialog__title" id="door-reset-dialog-title">Reset Door Counters! You sure?</h2>
+        <p class="client-id-dialog__hint" id="door-reset-dialog-hint">This will reset the door counters for the active client.</p>
+        <div class="client-id-dialog__actions">
+            <button type="button" class="client-id-dialog__btn" id="door-reset-cancel">Cancel</button>
+            <button type="button" class="client-id-dialog__btn client-id-dialog__btn--primary" id="door-reset-apply">Reset</button>
+        </div>
+    </div>
+</dialog>
+
+<script>
+    
+    const GRID_WIDTH = 15;
+    const GRID_HEIGHT = 28;
+    const CELL_SIZE = 30;
+    const CELL_GAP = 2;
+    const ROOM_PADDING = 5;
+    const room = document.getElementById("room");
+
+    const CELL_COUNT = GRID_WIDTH * GRID_HEIGHT;
+    const DEFAULT_CONFIG = {
+        clientId: "Sales Office",
+        brokerUrl: "wss://b0889ef8.ala.eu-central-1.emqxsl.com:8084/mqtt",
+        mqtt: {
+            username: "steinel_mqtt",
+            password: "Te6125te",
+            reconnectPeriod: 2000,
+            clean: true
+        },
+        topics: {
+            detections: "steinel_eo/Detections",
+            temperature: "steinel_eo/Temperature",
+            humidity: "steinel_eo/Humidity",
+            brightness: "steinel_eo/Brightness1",
+            presence: "steinel_eo/Presence1",
+            peopleTotal: "steinel_eo/NumberOfPeopleTotal",
+            doorEntries: "steinel_eo/DoorEntries",
+            doorExits: "steinel_eo/DoorExits",
+            doorCounterReset: "steinel_eo_setup/DoorCntReset",
+            temperatureCorrection: "steinel_eo_setup/TemperatureCorrection",
+            retainedStateBase: "steinel_eo_state"
+        },
+        payloadKeys: {
+            temperature: "Temperature",
+            humidity: "Humidity",
+            brightness: "Brightness1",
+            presence: "Presence1",
+            peopleTotal: "NumberOfPeopleTotal",
+            doorEntries: "DoorEntries",
+            doorExits: "DoorExits",
+            doorCounterReset: "DoorCntReset",
+            temperatureCorrection: "TemperatureCorrection"
+        },
+        ui: {
+            title: "Sales Office",
+            zoneNames: {
+                "0": "Brendan's Desk",
+                "1": "Terry's Desk",
+                "2": "Paul's Desk",
+                "3": "Hot Desk"
+            }
+        }
+    };
+
+    let APP_CONFIG = JSON.parse(JSON.stringify(DEFAULT_CONFIG));
+
+    const cells = [];
+
+    const THEME_STORAGE_KEY = "steinel_eo_theme";
+    const CLIENT_ID_STORAGE_KEY = "steinel_eo_selected_client_id";
+    const KNOWN_CLIENT_IDS_STORAGE_KEY = "steinel_eo_known_client_ids";
+    const ZONE_NAMES_STORAGE_KEY = "steinel_eo_zone_names";
+    const TEMPERATURE_CORRECTION_STORAGE_KEY = "steinel_eo_temperature_correction";
+
+    const knownClientIds = new Set();
+    let saveKnownIdsTimer = null;
+    let currentTemperatureCorrection = 0;
+    let activeZoneRenameId = null;
+    let lastDoorEntriesValue = null;
+    let lastDoorExitsValue = null;
+    let lastPresenceTimestampMs = null;
+    let lastDoorEntryTimestampMs = null;
+    let lastDoorExitTimestampMs = null;
+    let currentRetainedStateSubscription = null;
+
+    function loadStoredTemperatureCorrection() {
+        try {
+            const rawValue = localStorage.getItem(TEMPERATURE_CORRECTION_STORAGE_KEY);
+            if (rawValue === null) return 0;
+            const parsed = Number(rawValue);
+            return Number.isNaN(parsed) ? 0 : parsed;
+        } catch (e) {
+            return 0;
+        }
+    }
+
+    function saveStoredTemperatureCorrection(value) {
+        currentTemperatureCorrection = value;
+        try {
+            localStorage.setItem(TEMPERATURE_CORRECTION_STORAGE_KEY, String(value));
+        } catch (e) {
+            // Ignore storage failures.
+        }
+    }
+
+    function updateThemeToggleLabel(theme) {
+        const btn = document.getElementById("theme-toggle");
+        if (!btn) return;
+        const next = theme === "light" ? "Dark" : "Light";
+        btn.textContent = next;
+        btn.setAttribute("aria-pressed", theme === "light" ? "true" : "false");
+    }
+
+    function applyTheme(theme) {
+        document.body.dataset.theme = theme;
+        try {
+            localStorage.setItem(THEME_STORAGE_KEY, theme);
+        } catch (e) {
+            // Ignore storage failures.
+        }
+
+        updateThemeToggleLabel(theme);
+    }
+
+    function initThemeUI() {
+        let saved = null;
+        try {
+            saved = localStorage.getItem(THEME_STORAGE_KEY);
+        } catch (e) {
+            saved = null;
+        }
+
+        const theme = saved === "light" ? "light" : "dark";
+        document.body.dataset.theme = theme;
+        updateThemeToggleLabel(theme);
+
+        const btn = document.getElementById("theme-toggle");
+        if (btn) {
+            btn.addEventListener("click", () => {
+                const current = document.body.dataset.theme === "light" ? "light" : "dark";
+                applyTheme(current === "light" ? "dark" : "light");
+            });
+        }
+    }
+
+    function deepMerge(base, override) {
+        if (!override || typeof override !== "object") return base;
+        const out = Array.isArray(base) ? [...base] : { ...base };
+        Object.keys(override).forEach((key) => {
+            const bv = out[key];
+            const ov = override[key];
+            if (bv && typeof bv === "object" && !Array.isArray(bv) && ov && typeof ov === "object" && !Array.isArray(ov)) {
+                out[key] = deepMerge(bv, ov);
+            } else if (ov !== undefined) {
+                out[key] = ov;
+            }
+        });
+        return out;
+    }
+
+    function buildMetricTopics(config) {
+        return {
+            [config.topics.temperature]: {
+                key: "temperature",
+                min: 0,
+                max: 40,
+                unit: "C",
+                digits: 1,
+                payloadProp: config.payloadKeys.temperature
+            },
+            [config.topics.humidity]: {
+                key: "humidity",
+                min: 0,
+                max: 100,
+                unit: "%",
+                digits: 0,
+                payloadProp: config.payloadKeys.humidity
+            },
+            [config.topics.brightness]: {
+                key: "Brightness1",
+                min: 0,
+                max: 1000,
+                unit: "lux",
+                digits: 0,
+                payloadProp: config.payloadKeys.brightness
+            }
+        };
+    }
+
+    function loadCustomZoneNames() {
+        try {
+            const raw = localStorage.getItem(ZONE_NAMES_STORAGE_KEY);
+            if (!raw) return {};
+            const parsed = JSON.parse(raw);
+            return parsed && typeof parsed === "object" ? parsed : {};
+        } catch (e) {
+            return {};
+        }
+    }
+
+    function saveCustomZoneNames(names) {
+        try {
+            localStorage.setItem(ZONE_NAMES_STORAGE_KEY, JSON.stringify(names));
+        } catch (e) {
+            // Ignore storage failures.
+        }
+    }
+
+    function sanitizeTopicPart(value) {
+        return String(value ?? "")
+            .trim()
+            .replace(/[^a-zA-Z0-9_-]+/g, "_")
+            .replace(/^_+|_+$/g, "") || "default";
+    }
+
+    function getRetainedStateTopic(key, clientId = APP_CONFIG.clientId) {
+        return `${APP_CONFIG.topics.retainedStateBase}/${sanitizeTopicPart(clientId)}/${key}`;
+    }
+
+    function publishRetainedState(key, value, extra = {}) {
+        if (!mqttClient) return;
+        const payload = JSON.stringify({
+            value,
+            clientId: APP_CONFIG.clientId,
+            updatedAt: new Date().toISOString(),
+            ...extra
+        });
+        mqttClient.publish(getRetainedStateTopic(key), payload, { retain: true });
+    }
+
+    function refreshRetainedStateSubscription() {
+        if (!mqttClient) return;
+        const nextTopic = getRetainedStateTopic("#");
+        if (currentRetainedStateSubscription && currentRetainedStateSubscription !== nextTopic) {
+            mqttClient.unsubscribe(currentRetainedStateSubscription);
+        }
+        currentRetainedStateSubscription = nextTopic;
+        mqttClient.subscribe(nextTopic);
+    }
+
+    function parseRetainedStateMessage(rawPayload) {
+        try {
+            const data = JSON.parse(rawPayload.toString());
+            return data && typeof data === "object" ? data : null;
+        } catch (err) {
+            return null;
+        }
+    }
+
+    function applyRetainedZoneNames(zoneNames) {
+        if (!zoneNames || typeof zoneNames !== "object") return;
+        saveCustomZoneNames(zoneNames);
+        applyConfigToUI();
+    }
+
+    function handleRetainedStateMessage(topic, rawPayload) {
+        const prefix = `${APP_CONFIG.topics.retainedStateBase}/${sanitizeTopicPart(APP_CONFIG.clientId)}/`;
+        if (!topic.startsWith(prefix)) return false;
+
+        const retainedKey = topic.slice(prefix.length);
+        const data = parseRetainedStateMessage(rawPayload);
+        if (!data) return false;
+
+        if (retainedKey === "temperatureCorrection" && typeof data.value === "number") {
+            saveStoredTemperatureCorrection(data.value);
+            return true;
+        }
+
+        if (retainedKey === "lastPresenceTime") {
+            const parsed = Number(data.value);
+            if (!Number.isNaN(parsed) && parsed > 0) {
+                lastPresenceTimestampMs = parsed;
+                renderPresenceTime();
+            }
+            return true;
+        }
+
+        if (retainedKey === "lastEntryTime") {
+            const parsed = Number(data.value);
+            if (!Number.isNaN(parsed) && parsed > 0) {
+                lastDoorEntryTimestampMs = parsed;
+                renderDoorEntryTime();
+            }
+            return true;
+        }
+
+        if (retainedKey === "lastExitTime") {
+            const parsed = Number(data.value);
+            if (!Number.isNaN(parsed) && parsed > 0) {
+                lastDoorExitTimestampMs = parsed;
+                renderDoorExitTime();
+            }
+            return true;
+        }
+
+        if (retainedKey === "zoneNames") {
+            const zoneNames = data.zoneNames && typeof data.zoneNames === "object" ? data.zoneNames : data.value;
+            applyRetainedZoneNames(zoneNames);
+            return true;
+        }
+
+        return false;
+    }
+
+    function applyConfigToUI() {
+        const pageTitle = document.getElementById("page-title");
+        const configuredTitle = String(APP_CONFIG.clientId || APP_CONFIG.ui.title || DEFAULT_CONFIG.ui.title);
+        if (pageTitle) pageTitle.textContent = configuredTitle;
+        document.title = configuredTitle;
+
+        const presenceSubtext = document.getElementById("presence-topic-subtext");
+        if (presenceSubtext) presenceSubtext.textContent = `Listening: ${APP_CONFIG.payloadKeys.presence}`;
+
+        const peopleSubtext = document.getElementById("people-total-topic-subtext");
+        if (peopleSubtext) peopleSubtext.textContent = `Listening: ${APP_CONFIG.payloadKeys.peopleTotal}`;
+
+        const doorEntriesSubtext = document.getElementById("door-entries-topic-subtext");
+        if (doorEntriesSubtext) doorEntriesSubtext.textContent = `Listening: ${APP_CONFIG.payloadKeys.doorEntries}`;
+
+        const doorExitsSubtext = document.getElementById("door-exits-topic-subtext");
+        if (doorExitsSubtext) doorExitsSubtext.textContent = `Listening: ${APP_CONFIG.payloadKeys.doorExits}`;
+
+        const zoneNames = {
+            ...(DEFAULT_CONFIG.ui.zoneNames || {}),
+            ...(APP_CONFIG.ui.zoneNames || {}),
+            ...loadCustomZoneNames()
+        };
+        Object.keys(zoneNames).forEach((zoneId) => {
+            const el = document.getElementById(`zone-${zoneId}-name`);
+            if (el) el.textContent = zoneNames[zoneId];
+        });
+
+        renderDoorEntryTime();
+        renderDoorExitTime();
+    }
+
+    async function loadAppConfig() {
+        try {
+            const res = await fetch("./config.json", { cache: "no-store" });
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            const loaded = await res.json();
+            APP_CONFIG = deepMerge(JSON.parse(JSON.stringify(DEFAULT_CONFIG)), loaded);
+        } catch (err) {
+            APP_CONFIG = JSON.parse(JSON.stringify(DEFAULT_CONFIG));
+        }
+
+        try {
+            const savedClient = localStorage.getItem(CLIENT_ID_STORAGE_KEY);
+            if (savedClient) APP_CONFIG.clientId = savedClient;
+        } catch (e) {
+            // Ignore storage failures.
+        }
+
+        PRESENCE_TOPIC = APP_CONFIG.topics.presence;
+        PEOPLE_TOTAL_TOPIC = APP_CONFIG.topics.peopleTotal;
+        DOOR_ENTRIES_TOPIC = APP_CONFIG.topics.doorEntries;
+        DOOR_EXITS_TOPIC = APP_CONFIG.topics.doorExits;
+        METRIC_TOPICS = buildMetricTopics(APP_CONFIG);
+        applyConfigToUI();
+    }
+
+    function loadKnownClientIdsFromStorage() {
+        try {
+            const raw = localStorage.getItem(KNOWN_CLIENT_IDS_STORAGE_KEY);
+            if (!raw) return;
+            const arr = JSON.parse(raw);
+            if (Array.isArray(arr)) arr.forEach((id) => knownClientIds.add(String(id)));
+        } catch (e) {
+            // Ignore parse errors.
+        }
+    }
+
+    function schedulePersistKnownClientIds() {
+        if (saveKnownIdsTimer) clearTimeout(saveKnownIdsTimer);
+        saveKnownIdsTimer = setTimeout(() => {
+            saveKnownIdsTimer = null;
+            try {
+                localStorage.setItem(KNOWN_CLIENT_IDS_STORAGE_KEY, JSON.stringify(Array.from(knownClientIds).sort()));
+            } catch (e) {
+                // Ignore storage failures.
+            }
+        }, 400);
+    }
+
+    function recordIncomingClientId(rawPayload) {
+        const id = extractMessageClientId(rawPayload);
+        if (id === null) return;
+        if (!knownClientIds.has(id)) {
+            knownClientIds.add(id);
+            schedulePersistKnownClientIds();
+            const dlg = document.getElementById("client-id-dialog");
+            if (dlg && dlg.open) refreshClientIdSelect();
+        }
+    }
+
+    function refreshClientIdSelect() {
+        const sel = document.getElementById("client-id-select");
+        if (!sel) return;
+        const current = String(APP_CONFIG.clientId || "");
+        const sorted = Array.from(knownClientIds).sort();
+        if (current && !knownClientIds.has(current)) sorted.unshift(current);
+        sel.innerHTML = "";
+        sorted.forEach((id) => {
+            const opt = document.createElement("option");
+            opt.value = id;
+            opt.textContent = id;
+            if (id === current) opt.selected = true;
+            sel.appendChild(opt);
+        });
+        if (sorted.length === 0) {
+            const opt = document.createElement("option");
+            opt.value = "";
+            opt.textContent = "Waiting for messages…";
+            opt.disabled = true;
+            opt.selected = true;
+            sel.appendChild(opt);
+        }
+    }
+
+    function openClientIdDialog() {
+        refreshClientIdSelect();
+        const dlg = document.getElementById("client-id-dialog");
+        if (dlg && typeof dlg.showModal === "function") dlg.showModal();
+    }
+
+    function closeClientIdDialog() {
+        const dlg = document.getElementById("client-id-dialog");
+        if (dlg && typeof dlg.close === "function") dlg.close();
+    }
+
+    function applySelectedClientId() {
+        const sel = document.getElementById("client-id-select");
+        if (!sel || sel.disabled) return;
+        const v = sel.value;
+        if (!v) return;
+        APP_CONFIG.clientId = v;
+        currentTemperatureCorrection = 0;
+        lastPresenceTimestampMs = null;
+        lastDoorEntryTimestampMs = null;
+        lastDoorExitTimestampMs = null;
+        renderPresenceTime();
+        renderDoorEntryTime();
+        renderDoorExitTime();
+        try {
+            localStorage.setItem(CLIENT_ID_STORAGE_KEY, v);
+        } catch (e) {
+            // Ignore storage failures.
+        }
+        applyConfigToUI();
+        refreshRetainedStateSubscription();
+        closeClientIdDialog();
+    }
+
+    function initClientIdDialog() {
+        const titleEl = document.getElementById("page-title");
+        const dlg = document.getElementById("client-id-dialog");
+        const cancelBtn = document.getElementById("client-id-cancel");
+        const applyBtn = document.getElementById("client-id-apply");
+
+        if (titleEl) {
+            titleEl.addEventListener("click", () => openClientIdDialog());
+            titleEl.addEventListener("keydown", (e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    openClientIdDialog();
+                }
+            });
+            titleEl.setAttribute("role", "button");
+            titleEl.setAttribute("tabindex", "0");
+            titleEl.title = "Click to choose client ID";
+        }
+
+        if (cancelBtn) cancelBtn.addEventListener("click", () => closeClientIdDialog());
+        if (applyBtn) applyBtn.addEventListener("click", applySelectedClientId);
+
+        if (dlg) {
+            dlg.addEventListener("click", (e) => {
+                if (e.target === dlg) closeClientIdDialog();
+            });
+        }
+    }
+
+    function extractMessageClientId(rawPayload) {
+        try {
+            const data = JSON.parse(rawPayload.toString());
+            if (!data || typeof data !== "object") return null;
+            if (data.clientId !== undefined && data.clientId !== null) return String(data.clientId);
+            if (data.ClientId !== undefined && data.ClientId !== null) return String(data.ClientId);
+            if (data.clientID !== undefined && data.clientID !== null) return String(data.clientID);
+        } catch (err) {
+            return null;
+        }
+        return null;
+    }
+
+    function shouldProcessMessage(rawPayload) {
+        if (!APP_CONFIG.clientId) return true;
+        const incomingClientId = extractMessageClientId(rawPayload);
+        if (incomingClientId === null) return false;
+        return incomingClientId === String(APP_CONFIG.clientId);
+    }
+
+    let lastCompliantTimestampMs = null;
+    let lastCompliantDisplayMode = "absolute";
+    let lastCompliantRelativeTimer = null;
+
+    function formatTimeSince(ms) {
+        if (ms == null) return "—";
+        const diff = Date.now() - ms;
+        if (diff < 0) return "—";
+        if (diff < 5000) return "just now";
+        const s = Math.floor(diff / 1000);
+        if (s < 60) return `${s}s ago`;
+        const m = Math.floor(s / 60);
+        if (m < 60) return `${m}m ago`;
+        const h = Math.floor(m / 60);
+        if (h < 24) return `${h}h ago`;
+        const d = Math.floor(h / 24);
+        return `${d}d ago`;
+    }
+
+    function formatTimestamp(ms) {
+        if (ms == null) return "—";
+        const d = new Date(ms);
+        const day = String(d.getDate()).padStart(2, "0");
+        const month = String(d.getMonth() + 1).padStart(2, "0");
+        const year = d.getFullYear();
+        const time = d.toLocaleTimeString(undefined, {
+            hour: "2-digit",
+            minute: "2-digit",
+            second: "2-digit"
+        });
+        return `${day}/${month}/${year}, ${time}`;
+    }
+
+    function renderPresenceTime() {
+        const lastTimeEl = document.getElementById("presence-last-time");
+        if (lastTimeEl) {
+            lastTimeEl.textContent = `Last Presence: ${formatTimestamp(lastPresenceTimestampMs)}`;
+        }
+    }
+
+    function renderDoorEntryTime() {
+        const lastTimeEl = document.getElementById("door-entries-last-time");
+        if (lastTimeEl) {
+            lastTimeEl.textContent = `Last Entry: ${formatTimestamp(lastDoorEntryTimestampMs)}`;
+        }
+    }
+
+    function renderDoorExitTime() {
+        const lastTimeEl = document.getElementById("door-exits-last-time");
+        if (lastTimeEl) {
+            lastTimeEl.textContent = `Last Exit: ${formatTimestamp(lastDoorExitTimestampMs)}`;
+        }
+    }
+
+    function renderLastCompliantPill() {
+        const el = document.getElementById("last-compliant-time");
+        const labelEl = document.getElementById("last-compliant-label");
+        const pill = document.getElementById("last-compliant-pill");
+        if (!el) return;
+        if (lastCompliantTimestampMs == null) {
+            el.textContent = "—";
+            if (labelEl) labelEl.textContent = "Last data:";
+            if (pill) pill.setAttribute("aria-label", "No compliant data yet");
+            return;
+        }
+        if (lastCompliantDisplayMode === "relative") {
+            el.textContent = formatTimeSince(lastCompliantTimestampMs);
+            if (labelEl) labelEl.textContent = "Since last:";
+            if (pill) pill.setAttribute("aria-label", `Time since last data: ${formatTimeSince(lastCompliantTimestampMs)}`);
+        } else {
+            el.textContent = formatTimestamp(lastCompliantTimestampMs);
+            if (labelEl) labelEl.textContent = "Last data:";
+            if (pill) pill.setAttribute("aria-label", `Last data at ${el.textContent}`);
+        }
+    }
+
+    function stopLastCompliantRelativeTick() {
+        if (lastCompliantRelativeTimer) {
+            clearInterval(lastCompliantRelativeTimer);
+            lastCompliantRelativeTimer = null;
+        }
+    }
+
+    function startLastCompliantRelativeTick() {
+        stopLastCompliantRelativeTick();
+        lastCompliantRelativeTimer = setInterval(() => {
+            if (lastCompliantDisplayMode === "relative") {
+                renderLastCompliantPill();
+            }
+        }, 1000);
+    }
+
+    function toggleLastCompliantDisplayMode() {
+        lastCompliantDisplayMode = lastCompliantDisplayMode === "absolute" ? "relative" : "absolute";
+        if (lastCompliantDisplayMode === "relative") {
+            startLastCompliantRelativeTick();
+        } else {
+            stopLastCompliantRelativeTick();
+        }
+        renderLastCompliantPill();
+    }
+
+    function initLastCompliantPill() {
+        const pill = document.getElementById("last-compliant-pill");
+        if (!pill) return;
+        pill.addEventListener("click", (e) => {
+            e.preventDefault();
+            toggleLastCompliantDisplayMode();
+        });
+        pill.addEventListener("keydown", (e) => {
+            if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                toggleLastCompliantDisplayMode();
+            }
+        });
+        renderLastCompliantPill();
+    }
+
+    function updateLastCompliantMessageTime() {
+        lastCompliantTimestampMs = Date.now();
+        renderLastCompliantPill();
+    }
+
+    const people = {};
+    const colorById = {};
+    let nextColorIndex = 0;
+    let PRESENCE_TOPIC = DEFAULT_CONFIG.topics.presence;
+    let PEOPLE_TOTAL_TOPIC = DEFAULT_CONFIG.topics.peopleTotal;
+    let DOOR_ENTRIES_TOPIC = DEFAULT_CONFIG.topics.doorEntries;
+    let DOOR_EXITS_TOPIC = DEFAULT_CONFIG.topics.doorExits;
+    let METRIC_TOPICS = {};
+    const ZONE_TOPICS = {
+        "steinel_eo/ZonePeople0": { zoneId: "0", payloadKey: "ZonePeople0" },
+        "steinel_eo/ZonePeople1": { zoneId: "1", payloadKey: "ZonePeople1" },
+        "steinel_eo/ZonePeople2": { zoneId: "2", payloadKey: "ZonePeople2" },
+        "steinel_eo/ZonePeople3": { zoneId: "3", payloadKey: "ZonePeople3" }
+    };
+
+    function createGrid() {
+        for (let i = 0; i < CELL_COUNT; i++) {
+            const cell = document.createElement("div");
+            cell.className = "cell";
+            room.appendChild(cell);
+            cells.push(cell);
+        }
+    }
+
+    function getCell(x, y) {
+        const index = y * GRID_WIDTH + x;
+        return cells[index];
+    }
+
+    function isInBounds(x, y) {
+        return x >= 0 && x < GRID_WIDTH && y >= 0 && y < GRID_HEIGHT;
+    }
+
+    function stableStringify(value) {
+        if (value === null || value === undefined) return String(value);
+        if (typeof value !== "object") return String(value);
+        if (Array.isArray(value)) {
+            return `[${value.map(stableStringify).join(",")}]`;
+        }
+
+        const keys = Object.keys(value).sort();
+        const parts = keys.map(key => `${key}:${stableStringify(value[key])}`);
+        return `{${parts.join(",")}}`;
+    }
+
+    function normalizeId(rawId) {
+        if (rawId === null || rawId === undefined) return "unknown";
+        if (typeof rawId === "string" || typeof rawId === "number" || typeof rawId === "boolean") {
+            return String(rawId);
+        }
+
+        if (typeof rawId === "object") {
+            if ("id" in rawId) return String(rawId.id);
+            if ("value" in rawId) return String(rawId.value);
+            return stableStringify(rawId);
+        }
+
+        return String(rawId);
+    }
+
+    function findIdRecursively(value, depth = 0) {
+        if (depth > 4 || value === null || value === undefined) return null;
+        if (typeof value !== "object") return null;
+
+        if (Array.isArray(value)) {
+            for (const item of value) {
+                const found = findIdRecursively(item, depth + 1);
+                if (found) return found;
+            }
+            return null;
+        }
+
+        const keys = Object.keys(value);
+
+        // First pass: direct id-like keys on this object.
+        for (const key of keys) {
+            if (key.toLowerCase().includes("id")) {
+                const candidate = value[key];
+                if (candidate !== null && candidate !== undefined && typeof candidate !== "object") {
+                    return normalizeId(candidate);
+                }
+            }
+        }
+
+        // Second pass: recurse into nested objects/arrays.
+        for (const key of keys) {
+            const found = findIdRecursively(value[key], depth + 1);
+            if (found) return found;
+        }
+
+        return null;
+    }
+
+    function extractDetectionId(det, index) {
+        const candidateKeys = [
+            "id", "Id", "ID",
+            "personId", "personID",
+            "trackId", "trackID",
+            "uuid", "UUID"
+        ];
+
+        for (const key of candidateKeys) {
+            if (det[key] !== undefined && det[key] !== null) {
+                return normalizeId(det[key]);
+            }
+        }
+
+        if (det.person && det.person.id !== undefined && det.person.id !== null) {
+            return normalizeId(det.person.id);
+        }
+
+        if (det.target && det.target.id !== undefined && det.target.id !== null) {
+            return normalizeId(det.target.id);
+        }
+
+        const recursiveId = findIdRecursively(det);
+        if (recursiveId) return recursiveId;
+
+        // Fallback so multiple detections in one payload still render differently.
+        return `unknown-${index}`;
+    }
+
+    function getPersonColor(idKey) {
+        if (!colorById[idKey]) {
+            // Golden-angle spacing produces visually distinct colors.
+            const hue = Math.round((nextColorIndex * 137.508) % 360);
+            colorById[idKey] = `hsl(${hue}, 85%, 58%)`;
+            nextColorIndex += 1;
+        }
+        return colorById[idKey];
+    }
+
+    function toPixelPosition(x, y) {
+        const step = CELL_SIZE + CELL_GAP;
+        const offset = (CELL_SIZE - 24) / 2;
+        return {
+            px: ROOM_PADDING + x * step + offset,
+            py: ROOM_PADDING + y * step + offset
+        };
+    }
+
+    function spawnTrail(fromPx, fromPy, toPx, toPy, color) {
+        const dx = toPx - fromPx;
+        const dy = toPy - fromPy;
+        const distance = Math.hypot(dx, dy);
+        const stepPx = 12;
+        const steps = Math.max(1, Math.min(12, Math.floor(distance / stepPx)));
+
+        for (let i = 1; i <= steps; i++) {
+            const t = i / steps;
+            const dot = document.createElement("div");
+            dot.className = "trail-dot";
+            dot.style.background = color;
+            dot.style.left = `${fromPx + dx * t + 7}px`;
+            dot.style.top = `${fromPy + dy * t + 7}px`;
+            dot.style.animationDelay = `${i * 30}ms`;
+            room.appendChild(dot);
+            setTimeout(() => dot.remove(), 1900 + i * 30);
+        }
+    }
+
+    function createPerson(idKey) {
+        const person = document.createElement("div");
+        person.className = "person";
+        person.style.background = getPersonColor(idKey);
+        room.appendChild(person);
+        people[idKey] = { el: person, removeTimer: null, lastPx: null, lastPy: null };
+        return people[idKey];
+    }
+
+    function movePerson(idKey, x, y) {
+        if (!isInBounds(x, y)) return;
+        if (!people[idKey]) createPerson(idKey);
+
+        const personRecord = people[idKey];
+        const personEl = personRecord.el;
+
+        if (personRecord.removeTimer) {
+            clearTimeout(personRecord.removeTimer);
+            personRecord.removeTimer = null;
+            personEl.classList.remove("fading");
+        }
+
+        const { px, py } = toPixelPosition(x, y);
+        if (personRecord.lastPx !== null && personRecord.lastPy !== null) {
+            spawnTrail(personRecord.lastPx, personRecord.lastPy, px, py, getPersonColor(idKey));
+        }
+        personEl.style.transform = `translate(${px}px, ${py}px)`;
+        personRecord.lastPx = px;
+        personRecord.lastPy = py;
+    }
+
+    function removePerson(idKey) {
+        const personRecord = people[idKey];
+        if (!personRecord) return;
+
+        const personEl = personRecord.el;
+        personEl.classList.add("fading");
+        personRecord.removeTimer = setTimeout(() => {
+            personEl.remove();
+            delete people[idKey];
+        }, 500);
+    }
+
+    function setMqttStatus(state, message) {
+        const wrap = document.getElementById("mqtt-status");
+        const textEl = document.getElementById("mqtt-status-text");
+        if (!wrap || !textEl) return;
+        wrap.className = "mqtt-status " + state;
+        const labels = {
+            connecting: "Connecting",
+            connected: "Connected",
+            reconnecting: "Reconnecting",
+            disconnected: "Disconnected",
+            offline: "Offline",
+            error: "Error"
+        };
+        textEl.textContent = message || labels[state] || state;
+
+        const liveDot = document.getElementById("people-total-live-dot");
+        if (liveDot) {
+            // Mirror the top MQTT status pill colors.
+            liveDot.style.animation = "none";
+            if (state === "connected") {
+                liveDot.style.background = "#34d399";
+                liveDot.style.boxShadow = "0 0 10px rgba(52, 211, 153, 0.55)";
+            } else if (state === "connecting" || state === "reconnecting") {
+                liveDot.style.background = "#fbbf24";
+                liveDot.style.boxShadow = "0 0 0 2px rgba(255, 255, 255, 0.12)";
+                liveDot.style.animation = state === "connecting" ? "statusPulse 1.2s ease-in-out infinite" : "statusPulse 0.8s ease-in-out infinite";
+            } else if (state === "error" || state === "offline" || state === "disconnected") {
+                liveDot.style.background = "#f87171";
+                liveDot.style.boxShadow = "0 0 0 2px rgba(255, 255, 255, 0.12)";
+            } else {
+                // Default/fallback.
+                liveDot.style.background = "#6b7280";
+                liveDot.style.boxShadow = "0 0 0 2px rgba(255, 255, 255, 0.12)";
+            }
+        }
+    }
+
+    let mqttClient = null;
+
+    function disconnectMQTT() {
+        if (!mqttClient) return;
+        try {
+            mqttClient.end(true);
+        } catch (err) {
+            // Best-effort; we'll still clear local reference and update UI.
+        }
+        mqttClient = null;
+        setMqttStatus("disconnected");
+    }
+
+    function toggleMQTTConnection() {
+        // If we currently have a client instance, treat that as "connected-running" and allow disconnect.
+        if (mqttClient) {
+            disconnectMQTT();
+            return;
+        }
+        connectMQTT();
+    }
+
+    function clamp(value, min, max) {
+        return Math.max(min, Math.min(max, value));
+    }
+
+    function parseMetricValue(topic, rawPayload) {
+        const text = rawPayload.toString().trim();
+        const asNumber = Number(text);
+        if (!Number.isNaN(asNumber)) return asNumber;
+
+        try {
+            const data = JSON.parse(text);
+            if (typeof data === "number") return data;
+            if (typeof data?.value === "number") return data.value;
+            if (typeof data?.Value === "number") return data.Value;
+            if (typeof data?.reading === "number") return data.reading;
+            if (typeof data?.Reading === "number") return data.Reading;
+            const metric = METRIC_TOPICS[topic];
+            if (metric && metric.payloadProp && typeof data?.[metric.payloadProp] === "number") {
+                return data[metric.payloadProp];
+            }
+        } catch (err) {
+            // Ignore parse errors; returning null will skip update.
+        }
+
+        return null;
+    }
+
+    function updateGauge(topic, value) {
+        const metric = METRIC_TOPICS[topic];
+        if (!metric || value === null || Number.isNaN(value)) return;
+
+        const valueEl = document.getElementById(`${metric.key}-value`);
+        const fillEl = document.getElementById(`${metric.key}-fill`);
+        if (!valueEl || !fillEl) return;
+
+        valueEl.textContent = `${value.toFixed(metric.digits)}${metric.unit}`;
+        const pct = ((clamp(value, metric.min, metric.max) - metric.min) / (metric.max - metric.min)) * 100;
+        fillEl.style.width = `${pct}%`;
+    }
+
+    function parsePresenceValue(rawPayload) {
+        const text = rawPayload.toString().trim();
+        if (text.toLowerCase() === "true") return true;
+        if (text.toLowerCase() === "false") return false;
+
+        try {
+            const data = JSON.parse(text);
+            if (typeof data === "boolean") return data;
+            if (typeof data?.[APP_CONFIG.payloadKeys.presence] === "boolean") return data[APP_CONFIG.payloadKeys.presence];
+            if (typeof data?.presence === "boolean") return data.presence;
+        } catch (err) {
+            // Ignore parse errors; returning null will skip update.
+        }
+
+        return null;
+    }
+
+    function updatePresence(isPresent) {
+        if (typeof isPresent !== "boolean") return;
+
+        const card = document.getElementById("presence-card");
+        const icon = document.getElementById("presence-icon");
+        const status = document.getElementById("presence-status");
+        if (!card || !icon || !status) return;
+
+        card.classList.toggle("present", isPresent);
+        card.classList.toggle("absent", !isPresent);
+        icon.textContent = isPresent ? "●" : "○";
+        status.textContent = isPresent ? "Detected" : "Not Detected";
+
+        if (isPresent) {
+            lastPresenceTimestampMs = Date.now();
+            renderPresenceTime();
+            publishRetainedState("lastPresenceTime", lastPresenceTimestampMs);
+        }
+    }
+
+    function parsePeopleTotal(rawPayload) {
+        const text = rawPayload.toString().trim();
+        const asNumber = Number(text);
+        if (!Number.isNaN(asNumber)) return Math.max(0, Math.round(asNumber));
+
+        try {
+            const data = JSON.parse(text);
+            if (typeof data === "number") return Math.max(0, Math.round(data));
+            if (typeof data?.[APP_CONFIG.payloadKeys.peopleTotal] === "number") return Math.max(0, Math.round(data[APP_CONFIG.payloadKeys.peopleTotal]));
+            if (typeof data?.numberOfPeopleTotal === "number") return Math.max(0, Math.round(data.numberOfPeopleTotal));
+            if (typeof data?.total === "number") return Math.max(0, Math.round(data.total));
+        } catch (err) {
+            // Ignore parse errors; returning null will skip update.
+        }
+
+        return null;
+    }
+
+    function updatePeopleTotal(total) {
+        if (typeof total !== "number" || Number.isNaN(total)) return;
+        const valueEl = document.getElementById("people-total-value");
+        if (!valueEl) return;
+        valueEl.textContent = String(total);
+    }
+
+    function parseDoorCount(rawPayload, payloadKey) {
+        const text = rawPayload.toString().trim();
+        const asNumber = Number(text);
+        if (!Number.isNaN(asNumber)) return Math.max(0, Math.round(asNumber));
+
+        try {
+            const data = JSON.parse(text);
+            if (typeof data === "number") return Math.max(0, Math.round(data));
+            if (payloadKey && typeof data?.[payloadKey] === "number") return Math.max(0, Math.round(data[payloadKey]));
+        } catch (err) {
+            // Ignore parse errors; returning null will skip update.
+        }
+
+        return null;
+    }
+
+    function updateDoorEntries(total) {
+        if (typeof total !== "number" || Number.isNaN(total)) return;
+        const valueEl = document.getElementById("door-entries-value");
+        if (valueEl) {
+            valueEl.textContent = String(total);
+        }
+        if (lastDoorEntriesValue !== null && total !== lastDoorEntriesValue) {
+            lastDoorEntryTimestampMs = Date.now();
+            renderDoorEntryTime();
+            publishRetainedState("lastEntryTime", lastDoorEntryTimestampMs);
+        }
+        lastDoorEntriesValue = total;
+    }
+
+    function updateDoorExits(total) {
+        if (typeof total !== "number" || Number.isNaN(total)) return;
+        const valueEl = document.getElementById("door-exits-value");
+        if (valueEl) {
+            valueEl.textContent = String(total);
+        }
+        if (lastDoorExitsValue !== null && total !== lastDoorExitsValue) {
+            lastDoorExitTimestampMs = Date.now();
+            renderDoorExitTime();
+            publishRetainedState("lastExitTime", lastDoorExitTimestampMs);
+        }
+        lastDoorExitsValue = total;
+    }
+
+    function parseZonePeople(rawPayload, payloadKey) {
+        const text = rawPayload.toString().trim();
+        const asNumber = Number(text);
+        if (!Number.isNaN(asNumber)) return Math.max(0, Math.round(asNumber));
+
+        try {
+            const data = JSON.parse(text);
+            if (typeof data === "number") return Math.max(0, Math.round(data));
+            if (payloadKey && typeof data?.[payloadKey] === "number") return Math.max(0, Math.round(data[payloadKey]));
+        } catch (err) {
+            // Ignore parse errors; returning null will skip update.
+        }
+
+        return null;
+    }
+
+    function updateZoneStatus(zoneId, peopleCount) {
+        if (typeof peopleCount !== "number" || Number.isNaN(peopleCount)) return;
+        const pill = document.getElementById(`zone-${zoneId}-pill`);
+        const state = document.getElementById(`zone-${zoneId}-state`);
+        if (!pill || !state) return;
+
+        const occupied = peopleCount > 0;
+        pill.classList.toggle("occupied", occupied);
+        pill.classList.toggle("vacant", !occupied);
+        state.textContent = occupied ? "Occupied" : "Vacant";
+    }
+
+    function openZoneRenameDialog(zoneId) {
+        activeZoneRenameId = zoneId;
+        const dlg = document.getElementById("zone-name-dialog");
+        const input = document.getElementById("zone-name-input");
+        const currentNameEl = document.getElementById(`zone-${zoneId}-name`);
+        const currentName = currentNameEl ? currentNameEl.textContent.trim() : `Zone ${zoneId}`;
+        if (input) {
+            input.value = currentName;
+            window.setTimeout(() => {
+                input.focus();
+                input.select();
+            }, 0);
+        }
+        if (dlg && typeof dlg.showModal === "function") dlg.showModal();
+    }
+
+    function closeZoneRenameDialog() {
+        activeZoneRenameId = null;
+        const dlg = document.getElementById("zone-name-dialog");
+        if (dlg && typeof dlg.close === "function") dlg.close();
+    }
+
+    function applyZoneRename() {
+        if (activeZoneRenameId === null) return;
+        const input = document.getElementById("zone-name-input");
+        if (!input) return;
+
+        const trimmed = input.value.trim();
+        const customNames = loadCustomZoneNames();
+        if (!trimmed) {
+            delete customNames[activeZoneRenameId];
+        } else {
+            customNames[activeZoneRenameId] = trimmed;
+        }
+        saveCustomZoneNames(customNames);
+        applyConfigToUI();
+        publishRetainedState("zoneNames", customNames, { zoneNames: customNames });
+        closeZoneRenameDialog();
+    }
+
+    function initZoneRenameDialog() {
+        const cancelBtn = document.getElementById("zone-name-cancel");
+        const applyBtn = document.getElementById("zone-name-apply");
+        const input = document.getElementById("zone-name-input");
+
+        if (cancelBtn) cancelBtn.addEventListener("click", closeZoneRenameDialog);
+        if (applyBtn) applyBtn.addEventListener("click", applyZoneRename);
+        if (input) {
+            input.addEventListener("keydown", (e) => {
+                if (e.key === "Enter") {
+                    e.preventDefault();
+                    applyZoneRename();
+                }
+            });
+        }
+    }
+
+    function initZoneRenameActions() {
+        ["0", "1", "2", "3"].forEach((zoneId) => {
+            const pill = document.getElementById(`zone-${zoneId}-pill`);
+            if (!pill) return;
+            pill.addEventListener("click", () => openZoneRenameDialog(zoneId));
+            pill.addEventListener("keydown", (e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    openZoneRenameDialog(zoneId);
+                }
+            });
+        });
+    }
+
+    function openDoorCounterResetDialog() {
+        const dlg = document.getElementById("door-reset-dialog");
+        const hint = document.getElementById("door-reset-dialog-hint");
+        if (hint) {
+            hint.textContent = `This will reset the door counters for ${APP_CONFIG.clientId}.`;
+        }
+        if (dlg && typeof dlg.showModal === "function") dlg.showModal();
+    }
+
+    function closeDoorCounterResetDialog() {
+        const dlg = document.getElementById("door-reset-dialog");
+        if (dlg && typeof dlg.close === "function") dlg.close();
+    }
+
+    function publishDoorCounterReset() {
+        if (!mqttClient) {
+            window.alert("MQTT is not connected.");
+            return;
+        }
+
+        const payload = JSON.stringify({
+            [APP_CONFIG.payloadKeys.doorCounterReset]: true,
+            clientId: APP_CONFIG.clientId
+        });
+
+        mqttClient.publish(APP_CONFIG.topics.doorCounterReset, payload, (err) => {
+            if (err) {
+                window.alert("Failed to publish door counter reset.");
+                return;
+            }
+            closeDoorCounterResetDialog();
+        });
+    }
+
+    function initDoorCounterResetActions() {
+        const bindReset = (id) => {
+            const el = document.getElementById(id);
+            if (!el) return;
+            el.addEventListener("click", openDoorCounterResetDialog);
+            el.addEventListener("keydown", (e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    openDoorCounterResetDialog();
+                }
+            });
+        };
+
+        bindReset("door-entries-card");
+        bindReset("door-exits-card");
+
+        const cancelBtn = document.getElementById("door-reset-cancel");
+        const applyBtn = document.getElementById("door-reset-apply");
+        if (cancelBtn) cancelBtn.addEventListener("click", closeDoorCounterResetDialog);
+        if (applyBtn) applyBtn.addEventListener("click", publishDoorCounterReset);
+    }
+
+    function openTemperatureCalibrationDialog() {
+        const dlg = document.getElementById("temperature-calibration-dialog");
+        const input = document.getElementById("temperature-calibration-input");
+        if (input) {
+            input.value = String(currentTemperatureCorrection);
+            window.setTimeout(() => {
+                input.focus();
+                input.select();
+            }, 0);
+        }
+        if (dlg && typeof dlg.showModal === "function") dlg.showModal();
+    }
+
+    function closeTemperatureCalibrationDialog() {
+        const dlg = document.getElementById("temperature-calibration-dialog");
+        if (dlg && typeof dlg.close === "function") dlg.close();
+    }
+
+    function publishTemperatureCorrection() {
+        if (!mqttClient) {
+            window.alert("MQTT is not connected.");
+            return;
+        }
+
+        const input = document.getElementById("temperature-calibration-input");
+        if (!input) return;
+
+        const value = Number(input.value);
+        if (input.value.trim() === "" || Number.isNaN(value)) {
+            window.alert("Please enter a valid decimal value.");
+            input.focus();
+            return;
+        }
+
+        if (value < -12 || value > 12) {
+            window.alert("Temperature correction must be between -12 and 12.");
+            input.focus();
+            input.select();
+            return;
+        }
+
+        const payload = JSON.stringify({
+            [APP_CONFIG.payloadKeys.temperatureCorrection]: value,
+            clientId: APP_CONFIG.clientId
+        });
+
+        mqttClient.publish(APP_CONFIG.topics.temperatureCorrection, payload, (err) => {
+            if (err) {
+                window.alert("Failed to publish temperature correction.");
+                return;
+            }
+            saveStoredTemperatureCorrection(value);
+            publishRetainedState("temperatureCorrection", value);
+            closeTemperatureCalibrationDialog();
+        });
+    }
+
+    function initTemperatureCalibrationActions() {
+        const card = document.getElementById("temperature-card");
+        const cancelBtn = document.getElementById("temperature-calibration-cancel");
+        const applyBtn = document.getElementById("temperature-calibration-apply");
+        const input = document.getElementById("temperature-calibration-input");
+
+        if (card) {
+            card.addEventListener("click", openTemperatureCalibrationDialog);
+            card.addEventListener("keydown", (e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    openTemperatureCalibrationDialog();
+                }
+            });
+        }
+
+        if (cancelBtn) cancelBtn.addEventListener("click", closeTemperatureCalibrationDialog);
+        if (applyBtn) applyBtn.addEventListener("click", publishTemperatureCorrection);
+        if (input) {
+            input.addEventListener("keydown", (e) => {
+                if (e.key === "Enter") {
+                    e.preventDefault();
+                    publishTemperatureCorrection();
+                }
+            });
+        }
+    }
+
+    function handleMessage(payload) {
+        const data = JSON.parse(payload.toString());
+        if (!data.Detections) return;
+
+        const seenIds = new Set();
+        data.Detections.forEach((det, index) => {
+            const idKey = extractDetectionId(det, index);
+            seenIds.add(idKey);
+            movePerson(idKey, det.x, det.y);
+        });
+
+        Object.keys(people).forEach(id => {
+            if (!seenIds.has(id)) {
+                removePerson(id);
+            }
+        });
+    }
+
+    function connectMQTT() {
+        if (mqttClient) return;
+        const options = {
+            username: APP_CONFIG.mqtt.username,
+            password: APP_CONFIG.mqtt.password,
+            clientId: "room-tracker-" + Math.random().toString(16).slice(2),
+            reconnectPeriod: APP_CONFIG.mqtt.reconnectPeriod,
+            clean: APP_CONFIG.mqtt.clean
+        };
+
+        mqttClient = mqtt.connect(APP_CONFIG.brokerUrl, options);
+
+        mqttClient.on("connect", () => {
+            console.log("MQTT connected");
+            setMqttStatus("connected");
+            mqttClient.subscribe("steinel_eo/#");
+            refreshRetainedStateSubscription();
+        });
+
+        mqttClient.on("message", (topic, message) => {
+            recordIncomingClientId(message);
+
+            if (!shouldProcessMessage(message)) {
+                return;
+            }
+
+            if (handleRetainedStateMessage(topic, message)) {
+                return;
+            }
+
+            updateLastCompliantMessageTime();
+
+            if (topic === APP_CONFIG.topics.detections) {
+                handleMessage(message);
+                return;
+            }
+
+            if (METRIC_TOPICS[topic]) {
+                updateGauge(topic, parseMetricValue(topic, message));
+                return;
+            }
+
+            if (topic === PRESENCE_TOPIC) {
+                updatePresence(parsePresenceValue(message));
+                return;
+            }
+
+            if (topic === PEOPLE_TOTAL_TOPIC) {
+                updatePeopleTotal(parsePeopleTotal(message));
+                return;
+            }
+
+            if (topic === DOOR_ENTRIES_TOPIC) {
+                updateDoorEntries(parseDoorCount(message, APP_CONFIG.payloadKeys.doorEntries));
+                return;
+            }
+
+            if (topic === DOOR_EXITS_TOPIC) {
+                updateDoorExits(parseDoorCount(message, APP_CONFIG.payloadKeys.doorExits));
+                return;
+            }
+
+            if (ZONE_TOPICS[topic]) {
+                const zoneMeta = ZONE_TOPICS[topic];
+                const zoneCount = parseZonePeople(message, zoneMeta.payloadKey);
+                updateZoneStatus(zoneMeta.zoneId, zoneCount);
+            }
+        });
+
+        mqttClient.on("reconnect", () => {
+            setMqttStatus("reconnecting");
+        });
+
+        mqttClient.on("close", () => {
+            setMqttStatus("disconnected");
+        });
+
+        mqttClient.on("offline", () => {
+            setMqttStatus("offline");
+        });
+
+        mqttClient.on("disconnect", () => {
+            setMqttStatus("disconnected");
+        });
+
+        mqttClient.on("error", (err) => {
+            console.error("MQTT error:", err);
+            setMqttStatus("error", err && err.message ? `Error: ${err.message}` : "Error");
+        });
+    }
+
+    createGrid();
+    currentTemperatureCorrection = loadStoredTemperatureCorrection();
+    initThemeUI();
+    initClientIdDialog();
+    initZoneRenameDialog();
+    initDoorCounterResetActions();
+    initTemperatureCalibrationActions();
+    initZoneRenameActions();
+    initLastCompliantPill();
+
+    const mqttStatusEl = document.getElementById("mqtt-status");
+    if (mqttStatusEl) {
+        mqttStatusEl.addEventListener("click", toggleMQTTConnection);
+        mqttStatusEl.addEventListener("keydown", (e) => {
+            if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                toggleMQTTConnection();
+            }
+        });
+    }
+    loadAppConfig().then(() => {
+        loadKnownClientIdsFromStorage();
+        if (APP_CONFIG.clientId) knownClientIds.add(String(APP_CONFIG.clientId));
+        connectMQTT();
+    });
+</script>
+
+</body>
 </html>

@@ -1,0 +1,43 @@
+{
+  "clientId": "Sales Office",
+  "brokerUrl": "wss://b0889ef8.ala.eu-central-1.emqxsl.com:8084/mqtt",
+  "mqtt": {
+    "username": "steinel_mqtt",
+    "password": "Te6125te",
+    "reconnectPeriod": 2000,
+    "clean": true
+  },
+  "topics": {
+    "detections": "steinel_eo/Detections",
+    "temperature": "steinel_eo/Temperature",
+    "humidity": "steinel_eo/Humidity",
+    "brightness": "steinel_eo/Brightness1",
+    "presence": "steinel_eo/Presence1",
+    "peopleTotal": "steinel_eo/NumberOfPeopleTotal",
+    "doorEntries": "steinel_eo/DoorEntries",
+    "doorExits": "steinel_eo/DoorExits",
+    "doorCounterReset": "steinel_eo_setup/DoorCntReset",
+    "temperatureCorrection": "steinel_eo_setup/TemperatureCorrection",
+    "retainedStateBase": "steinel_eo_state"
+  },
+  "payloadKeys": {
+    "temperature": "Temperature",
+    "humidity": "Humidity",
+    "brightness": "Brightness1",
+    "presence": "Presence1",
+    "peopleTotal": "NumberOfPeopleTotal",
+    "doorEntries": "DoorEntries",
+    "doorExits": "DoorExits",
+    "doorCounterReset": "DoorCntReset",
+    "temperatureCorrection": "TemperatureCorrection"
+  },
+  "ui": {
+    "title": "Sales Office",
+    "zoneNames": {
+      "0": "Brendan's Desk",
+      "1": "Terry's Desk",
+      "2": "Paul's Desk",
+      "3": "Hot Desk"
+    }
+  }
+}
